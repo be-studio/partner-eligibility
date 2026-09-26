@@ -5,7 +5,6 @@ import type { Member } from "./types.js";
 export type UpsertResult = "created" | "updated" | "unchanged";
 
 export interface MemberStore {
-  upsert(member: Member): Promise<UpsertResult>;
   // Applies every member in order and saves once, all-or-nothing. Returns one
   // result per member, in the same order.
   upsertMany(members: Member[]): Promise<UpsertResult[]>;
@@ -117,11 +116,6 @@ export class JsonFileMemberStore implements MemberStore {
     }
     // Record our own write so the next load() doesn't needlessly re-read it.
     this.loadedMtimeMs = await this.fileMtimeMs();
-  }
-
-  async upsert(member: Member): Promise<UpsertResult> {
-    const [result] = await this.upsertMany([member]);
-    return result;
   }
 
   async upsertMany(members: Member[]): Promise<UpsertResult[]> {

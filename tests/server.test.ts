@@ -30,7 +30,7 @@ describe("GET /members/:partnerMemberId", () => {
 
   it("returns 200 and the member for a known id", async () => {
     const store = new JsonFileMemberStore(path.join(dir, "members.json"));
-    await store.upsert(member);
+    await store.upsertMany([member]);
     const app = createApp(store);
 
     const response = await request(app).get("/members/PM-1");

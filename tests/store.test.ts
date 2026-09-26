@@ -37,23 +37,23 @@ describe("JsonFileMemberStore", () => {
 
   it("persists across separate store instances, simulating separate process runs", async () => {
     const storeA = new JsonFileMemberStore(filePath);
-    await expect(storeA.upsert(member)).resolves.toBe("created");
+    await expect(storeA.upsertMany([member])).resolves.toEqual(["created"]);
 
     const storeB = new JsonFileMemberStore(filePath);
     await expect(storeB.findById("PM-1")).resolves.toEqual(member);
 
     // Re-importing the same record through the new instance must not duplicate it.
-    await expect(storeB.upsert(member)).resolves.toBe("unchanged");
+    await expect(storeB.upsertMany([member])).resolves.toEqual(["unchanged"]);
     await expect(storeB.all()).resolves.toHaveLength(1);
   });
 
   it("persists an update made by one instance so a later instance sees it", async () => {
     const storeA = new JsonFileMemberStore(filePath);
-    await storeA.upsert(member);
+    await storeA.upsertMany([member]);
 
     const changed = { ...member, policyEnd: "2025-06-30" };
     const storeB = new JsonFileMemberStore(filePath);
-    await expect(storeB.upsert(changed)).resolves.toBe("updated");
+    await expect(storeB.upsertMany([changed])).resolves.toEqual(["updated"]);
 
     const storeC = new JsonFileMemberStore(filePath);
     await expect(storeC.findById("PM-1")).resolves.toEqual(changed);
@@ -65,23 +65,23 @@ describe("JsonFileMemberStore", () => {
     await expect(server.findById("PM-1")).resolves.toBeUndefined();
 
     const cli = new JsonFileMemberStore(filePath);
-    await cli.upsert(member);
+    await cli.upsertMany([member]);
     await expect(server.findById("PM-1")).resolves.toEqual(member);
 
     const changed = { ...member, email: "alice.new@example.com" };
-    await new JsonFileMemberStore(filePath).upsert(changed);
+    await new JsonFileMemberStore(filePath).upsertMany([changed]);
     await expect(server.findById("PM-1")).resolves.toEqual(changed);
   });
 
   it("keeps the previous data, on disk and in memory, when a save fails", async () => {
     const store = new JsonFileMemberStore(filePath);
-    await store.upsert(member);
+    await store.upsertMany([member]);
 
     vi.spyOn(fsPromises, "rename").mockRejectedValueOnce(
       new Error("disk full")
     );
     const changed = { ...member, email: "alice.new@example.com" };
-    await expect(store.upsert(changed)).rejects.toThrow("disk full");
+    await expect(store.upsertMany([changed])).rejects.toThrow("disk full");
 
     await expect(store.findById("PM-1")).resolves.toEqual(member);
     await expect(
