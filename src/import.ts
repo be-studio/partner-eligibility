@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { parse, type Info } from "csv-parse/sync";
+import { parse } from "csv-parse/sync";
 import type { MemberStore, UpsertResult } from "./store.js";
 import { validateRow, type RawRow } from "./validate.js";
 import type { ImportReport, Member, RejectedRow } from "./types.js";
@@ -18,21 +18,27 @@ export async function importCsv(
   // - relax_column_count: otherwise one row with the wrong number of values
   //   stops the whole file from parsing. A short row's missing values are
   //   reported by validateRow as "... is required".
-  // - info: gives each row's line number in the file (blank lines included),
-  //   so rejections match what the partner sees in their editor. csv-parse's
-  //   types don't cover `info` without `columns`, hence the cast.
-  const [headerRow, ...rows] = parse(content, {
+  // - on_record: collects each row with its line number in the file (blank
+  //   lines included), so rejections match what the partner sees in their
+  //   editor. Used instead of the `info` option, which csv-parse's types
+  //   don't cover without `columns`, so it would need a cast.
+  const parsedRows: { values: string[]; line: number }[] = [];
+  parse(content, {
     trim: true,
     skip_empty_lines: true,
     relax_column_count: true,
-    info: true
-  }) as unknown as { record: string[]; info: Info }[];
-  const header = headerRow?.record ?? [];
+    on_record: (values, { lines }) => {
+      parsedRows.push({ values, line: lines });
+      return values;
+    }
+  });
+  const [headerRow, ...rows] = parsedRows;
+  const header = headerRow?.values ?? [];
 
   const rejected: RejectedRow[] = [];
   const validMembers: Member[] = [];
 
-  for (const { record: values, info } of rows) {
+  for (const { values, line } of rows) {
     const row: RawRow = Object.fromEntries(
       header.map((name, i) => [name, values[i]])
     );
@@ -45,7 +51,7 @@ export async function importCsv(
     }
     if (!result.valid || reasons.length > 0) {
       rejected.push({
-        line: info.lines,
+        line,
         partnerMemberId: row.partner_member_id || undefined,
         reasons
       });
