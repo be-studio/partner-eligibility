@@ -1,12 +1,9 @@
-import path from "node:path";
+import { dataFilePath, port } from "./config.js";
 import { createApp } from "./server.js";
 import { JsonFileMemberStore } from "./store.js";
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
-const DATA_FILE =
-  process.env.DATA_FILE ?? path.join(process.cwd(), "data", "members.json");
-
-const store = new JsonFileMemberStore(DATA_FILE);
+const PORT = port(process.env.PORT);
+const store = new JsonFileMemberStore(dataFilePath(process.env.DATA_FILE));
 const app = createApp(store);
 
 app.listen(PORT, () => {
