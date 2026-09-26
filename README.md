@@ -18,7 +18,7 @@ npm install
 npm run import -- samples/sample.csv
 ```
 
-Prints a summary (created / updated / unchanged / rejected) and, for each rejected row, the row number and every reason it failed. Running the same file again is safe — it won't create duplicates, and unchanged rows are reported as `unchanged` rather than re-created.
+Prints a summary (created / updated / unchanged / rejected) and, for each rejected row, its line number in the file and every reason it failed. Running the same file again is safe — it won't create duplicates, and unchanged rows are reported as `unchanged` rather than re-created.
 
 To see the update path, import the same file again after editing a value, or try the second sample:
 
@@ -87,7 +87,7 @@ I used Claude Code throughout, but treated it as a pair-programmer to direct rat
 
 ## How I checked correctness
 
-- `npm test` — 20 automated tests covering validation rules (including edge cases like leap years, `2024-02-30`, and rows with missing columns), store upsert semantics (created/updated/unchanged transitions, including persistence across separate `JsonFileMemberStore` instances to simulate re-running the CLI as a fresh process), full-file import behaviour (idempotency, updates, rejected-row reporting, a ragged/malformed row), and the HTTP endpoint (hit and miss).
+- `npm test` — 22 automated tests covering validation rules (including edge cases like leap years, `2024-02-30`, and rows with missing columns), store upsert semantics (created/updated/unchanged transitions, including persistence across separate `JsonFileMemberStore` instances to simulate re-running the CLI as a fresh process), full-file import behaviour (idempotency, updates, rejected-row reporting, a ragged/malformed row), and the HTTP endpoint (hit and miss).
 - Manually ran `npm run import -- samples/sample.csv` twice in a row and confirmed the second run reports zero creates and all previously-valid rows as `unchanged`, with identical rejections both times.
 - Manually ran `npm run import -- samples/sample-updated.csv` and confirmed exactly one `updated` result, and that `data/members.json` reflects the new value.
 - Manually started the server and `curl`'d both a known and an unknown `partner_member_id` to confirm the 200/404 responses.

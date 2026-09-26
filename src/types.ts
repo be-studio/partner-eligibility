@@ -9,7 +9,7 @@ export interface Member {
 }
 
 export interface RejectedRow {
-  row: number; // 1-indexed data row, excluding the header
+  line: number; // line in the CSV file; the header is line 1
   partnerMemberId: string | undefined;
   reasons: string[];
 }

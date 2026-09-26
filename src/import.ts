@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { parse } from "csv-parse/sync";
+import { parse, type Info } from "csv-parse/sync";
 import type { MemberStore } from "./store.js";
 import { validateRow, type RawRow } from "./validate.js";
 import type { ImportReport, RejectedRow } from "./types.js";
@@ -14,11 +14,15 @@ export async function importCsv(
   // a realistic partner-file error) throws and aborts parsing the entire
   // file. With it, a short row just comes through with missing keys, which
   // validateRow already reports as "field is required".
-  const rows: RawRow[] = parse(content, {
+  //
+  // info: attaches each row's line number in the file, so rejections point at
+  // the line the partner sees in their editor (blank lines included).
+  const rows = parse<{ record: RawRow; info: Info }>(content, {
     columns: true,
     trim: true,
     skip_empty_lines: true,
-    relax_column_count: true
+    relax_column_count: true,
+    info: true
   });
 
   const rejected: RejectedRow[] = [];
@@ -26,11 +30,11 @@ export async function importCsv(
   let updated = 0;
   let unchanged = 0;
 
-  for (const [index, row] of rows.entries()) {
+  for (const { record: row, info } of rows) {
     const result = validateRow(row);
     if (!result.valid) {
       rejected.push({
-        row: index + 1,
+        line: info.lines,
         partnerMemberId: row.partner_member_id || undefined,
         reasons: result.reasons
       });

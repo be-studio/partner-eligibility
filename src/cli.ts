@@ -27,7 +27,7 @@ async function main() {
     for (const r of report.rejected) {
       const id = r.partnerMemberId ?? "<missing>";
       console.log(
-        `  Row ${r.row} (partner_member_id=${id}): ${r.reasons.join("; ")}`
+        `  Line ${r.line} (partner_member_id=${id}): ${r.reasons.join("; ")}`
       );
     }
   }

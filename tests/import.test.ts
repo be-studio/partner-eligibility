@@ -43,12 +43,12 @@ describe("importCsv", () => {
     expect(report.unchanged).toBe(0);
     expect(report.rejected).toHaveLength(2);
     expect(report.rejected[0]).toMatchObject({
-      row: 2,
+      line: 3,
       partnerMemberId: "PM-2",
       reasons: ["email is not a valid email address"]
     });
     expect(report.rejected[1]).toMatchObject({
-      row: 3,
+      line: 4,
       partnerMemberId: undefined,
       reasons: ["partner_member_id is required"]
     });
@@ -104,6 +104,24 @@ describe("importCsv", () => {
     expect(report.created).toBe(1);
     expect(report.rejected).toHaveLength(1);
     expect(report.rejected[0].reasons).toContain("policy_end is required");
+  });
+
+  it("reports rejected rows by their line in the file, counting blank lines", async () => {
+    const csv = [
+      HEADER,
+      "PM-1,Alice,Nguyen,1990-04-12,alice@example.com,2024-01-01,2024-12-31",
+      "",
+      "",
+      "PM-2,Ben,,1985-11-02,ben@example.com,2024-01-01,2024-12-31"
+    ].join("\r\n");
+
+    const report = await importCsv(writeCsv(dir, csv), store);
+
+    expect(report.rejected).toHaveLength(1);
+    expect(report.rejected[0]).toMatchObject({
+      line: 5,
+      partnerMemberId: "PM-2"
+    });
   });
 
   it("lets a later duplicate partner_member_id in the same file win", async () => {
