@@ -50,24 +50,20 @@ export function validateRow(row: RawRow): ValidationResult {
     reasons.push("email is not a valid email address");
 
   const policyStart = row.policy_start?.trim();
+  const policyStartValid =
+    policyStart !== undefined && isValidCalendarDate(policyStart);
   if (!policyStart) reasons.push("policy_start is required");
-  else if (!isValidCalendarDate(policyStart)) {
+  else if (!policyStartValid)
     reasons.push("policy_start must be a valid YYYY-MM-DD date");
-  }
 
   const policyEnd = row.policy_end?.trim();
+  const policyEndValid =
+    policyEnd !== undefined && isValidCalendarDate(policyEnd);
   if (!policyEnd) reasons.push("policy_end is required");
-  else if (!isValidCalendarDate(policyEnd)) {
+  else if (!policyEndValid)
     reasons.push("policy_end must be a valid YYYY-MM-DD date");
-  }
 
-  if (
-    policyStart &&
-    policyEnd &&
-    isValidCalendarDate(policyStart) &&
-    isValidCalendarDate(policyEnd) &&
-    policyEnd < policyStart
-  ) {
+  if (policyStartValid && policyEndValid && policyEnd! < policyStart!) {
     reasons.push("policy_end must not be before policy_start");
   }
 
