@@ -49,7 +49,7 @@ describe("importCsv", () => {
     });
     expect(report.rejected[1]).toMatchObject({
       row: 3,
-      partnerMemberId: "",
+      partnerMemberId: undefined,
       reasons: ["partner_member_id is required"]
     });
 

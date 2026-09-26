@@ -31,7 +31,7 @@ export async function importCsv(
     if (!result.valid) {
       rejected.push({
         row: index + 1,
-        partnerMemberId: row.partner_member_id,
+        partnerMemberId: row.partner_member_id || undefined,
         reasons: result.reasons
       });
       continue;
