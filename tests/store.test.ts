@@ -54,6 +54,19 @@ describe("JsonFileMemberStore", () => {
     await expect(storeC.all()).resolves.toHaveLength(1);
   });
 
+  it("sees writes from another instance after it has already loaded, as a running server must", async () => {
+    const server = new JsonFileMemberStore(filePath);
+    await expect(server.findById("PM-1")).resolves.toBeUndefined();
+
+    const cli = new JsonFileMemberStore(filePath);
+    await cli.upsert(member);
+    await expect(server.findById("PM-1")).resolves.toEqual(member);
+
+    const changed = { ...member, email: "alice.new@example.com" };
+    await new JsonFileMemberStore(filePath).upsert(changed);
+    await expect(server.findById("PM-1")).resolves.toEqual(changed);
+  });
+
   it("starts empty when the backing file doesn't exist yet", async () => {
     const store = new JsonFileMemberStore(
       path.join(dir, "does-not-exist.json")
