@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { parse, type Info } from "csv-parse/sync";
 import type { MemberStore, UpsertResult } from "./store.js";
 import { validateRow, type RawRow } from "./validate.js";
@@ -8,7 +8,7 @@ export async function importCsv(
   filePath: string,
   store: MemberStore
 ): Promise<ImportReport> {
-  const content = readFileSync(filePath, "utf-8");
+  const content = await readFile(filePath, "utf-8");
 
   // Rows are parsed as plain lists of values and matched to the header here,
   // rather than with csv-parse's `columns` option, because that option quietly
