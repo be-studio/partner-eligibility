@@ -4,3 +4,4 @@ data/members.json
 .idea/
 .claude/
 .DS_Store
+data/*.tmp

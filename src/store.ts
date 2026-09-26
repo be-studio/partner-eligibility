@@ -61,10 +61,19 @@ export class JsonFileMemberStore implements MemberStore {
     this.loaded = true;
   }
 
-  private async persist(): Promise<void> {
+  // Writes to a temp file then renames it over the real one: a rename is
+  // all-or-nothing, so a crash mid-write can't leave a truncated members.json.
+  private async persist(members: Map<string, Member>): Promise<void> {
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    const records = [...this.members.values()];
-    await fs.writeFile(this.filePath, JSON.stringify(records, null, 2));
+    const tempPath = `${this.filePath}.${process.pid}.tmp`;
+    const records = [...members.values()];
+    try {
+      await fs.writeFile(tempPath, JSON.stringify(records, null, 2));
+      await fs.rename(tempPath, this.filePath);
+    } catch (error) {
+      await fs.rm(tempPath, { force: true });
+      throw error;
+    }
     // Record our own write so the next load() doesn't needlessly re-read it.
     this.loadedMtimeMs = await this.fileMtimeMs();
   }
@@ -72,8 +81,11 @@ export class JsonFileMemberStore implements MemberStore {
   async upsert(member: Member): Promise<UpsertResult> {
     await this.load();
     const existing = this.members.get(member.partnerMemberId);
-    this.members.set(member.partnerMemberId, member);
-    await this.persist();
+    // Only adopt the new state once it's safely on disk, so a failed save
+    // can't leave memory and the file disagreeing.
+    const next = new Map(this.members).set(member.partnerMemberId, member);
+    await this.persist(next);
+    this.members = next;
     if (!existing) return "created";
     return isSameMember(existing, member) ? "unchanged" : "updated";
   }

@@ -1,7 +1,12 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  promises as fsPromises,
+  readdirSync,
+  rmSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JsonFileMemberStore } from "../src/store.js";
 import type { Member } from "../src/types.js";
 
@@ -25,6 +30,7 @@ describe("JsonFileMemberStore", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -65,6 +71,23 @@ describe("JsonFileMemberStore", () => {
     const changed = { ...member, email: "alice.new@example.com" };
     await new JsonFileMemberStore(filePath).upsert(changed);
     await expect(server.findById("PM-1")).resolves.toEqual(changed);
+  });
+
+  it("keeps the previous data, on disk and in memory, when a save fails", async () => {
+    const store = new JsonFileMemberStore(filePath);
+    await store.upsert(member);
+
+    vi.spyOn(fsPromises, "rename").mockRejectedValueOnce(
+      new Error("disk full")
+    );
+    const changed = { ...member, email: "alice.new@example.com" };
+    await expect(store.upsert(changed)).rejects.toThrow("disk full");
+
+    await expect(store.findById("PM-1")).resolves.toEqual(member);
+    await expect(
+      new JsonFileMemberStore(filePath).findById("PM-1")
+    ).resolves.toEqual(member);
+    expect(readdirSync(dir)).toEqual(["members.json"]);
   });
 
   it("starts empty when the backing file doesn't exist yet", async () => {
