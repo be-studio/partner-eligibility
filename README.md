@@ -1,10 +1,10 @@
 # Partner eligibility import
 
-Imports a partner-supplied CSV of eligible members, stores the valid rows, and lets you look one up by `partner_member_id`.
+A small TypeScript / Node.js program that imports a partner's CSV list of eligible members. It saves the valid rows, rejects the invalid ones with the reasons why, and lets you look up a member by `partner_member_id` over HTTP.
 
-## Requirements
+## What you need
 
-- Node.js 22+
+- Node.js 22 or later
 
 ## Install
 
@@ -18,16 +18,31 @@ npm install
 npm run import -- samples/sample.csv
 ```
 
-Prints a summary (created / updated / unchanged / rejected) and, for each rejected row, its line number in the file and every reason it failed. Running the same file again is safe — it won't create duplicates, and unchanged rows are reported as `unchanged` rather than re-created.
+This prints how many rows were created, updated, unchanged and rejected. For each rejected row, it shows the line number in the file and every reason the row failed.
 
-To see the update path, import the same file again after editing a value, or try the second sample:
+Running the same file again is safe. It won't create duplicates, and rows that haven't changed are reported as `unchanged`.
+
+To see a row being updated, import the second sample file after the first:
 
 ```bash
 npm run import -- samples/sample.csv
 npm run import -- samples/sample-updated.csv   # PM-1002's email has changed
 ```
 
-Imported data is written to `data/members.json` (created on first run, git-ignored).
+Imported members are saved to `data/members.json`. The file is created on the first run and is not committed to git. Set `DATA_FILE` to use a different file.
+
+### The sample file
+
+`samples/sample.csv` has 3 valid rows and 6 deliberately broken ones:
+
+| Line | Problem                                           |
+| ---- | ------------------------------------------------- |
+| 5    | Missing email                                     |
+| 6    | Email isn't a valid address (`[at]`)              |
+| 7    | Date of birth in the wrong format                 |
+| 8    | Policy ends before it starts                      |
+| 9    | Missing `partner_member_id`                       |
+| 10   | Missing `policy_end` (the row is one value short) |
 
 ## Look up a member
 
@@ -40,59 +55,91 @@ npm run dev
 Then, in another terminal:
 
 ```bash
-curl localhost:3000/members/PM-1001   # 200, the member
+curl localhost:3000/members/PM-1001     # 200 and the member's details
 curl localhost:3000/members/no-such-id  # 404
 ```
 
-## Tests
+The server runs on port 3000. Set `PORT` to change it. If you import while the server is running, the server picks up the new data without a restart.
+
+## Run the tests
 
 ```bash
 npm test
 ```
 
-Also available: `npm run lint` (ESLint), `npm run format` / `npm run format:check` (Prettier), `npm run build` (type-check via `tsc`).
+Other checks: `npm run lint` (ESLint), `npm run format:check` (Prettier) and `npm run build` (TypeScript type check).
 
-## How it's put together
+## How the code is organised
 
-- `src/types.ts` — the `Member` domain type and report shapes.
-- `src/validate.ts` — pure validation of one raw CSV row; no side effects, easy to unit test in isolation.
-- `src/store.ts` — a `MemberStore` interface with one implementation, `JsonFileMemberStore`. Everything else (the import logic, the server, the tests) depends only on the interface, not the concrete class — so swapping in a different storage engine later is a one-file change, not a redesign.
-- `src/import.ts` — reads and parses the CSV, validates each row, and upserts all the valid ones into whichever store it's given in a single batch.
-- `src/server.ts` — a small Express app exposing the lookup endpoint; takes a store as an argument so tests can hand it a store backed by a throwaway temp file, without starting a real server.
-- `src/report.ts` — turns an import report into the text the import command prints, so that output can be tested without running the command.
-- `src/config.ts` — the settings both entry points share: where the data file lives (`DATA_FILE`) and which port to listen on (`PORT`, checked to be a valid port number).
-- `src/index.ts` / `src/cli.ts` — the two entry points (HTTP server, import command). These are the only places that construct a real `JsonFileMemberStore` or touch `process`/`console` — everything else is pure and directly testable.
+- `src/types.ts`: the shape of a member and of the import report.
+- `src/validate.ts`: checks one CSV row. It doesn't read or write anything, so it's easy to test on its own.
+- `src/import.ts`: reads the CSV, checks each row, and saves all the valid rows in one go.
+- `src/store.ts`: where members are saved. `MemberStore` is the interface, and `JsonFileMemberStore` saves to a JSON file. The rest of the code only uses the interface, so the storage could be swapped (for example, to a database) by changing this one file.
+- `src/server.ts`: the Express app with the lookup endpoint. It's given a store, so the tests can use a temporary one.
+- `src/report.ts`: turns the import results into the text the import command prints.
+- `src/config.ts`: the settings shared by the import command and the server (`DATA_FILE` and `PORT`). An invalid `PORT` gives a clear error.
+- `src/cli.ts` and `src/index.ts`: the two starting points (the import command and the server). They are the only files that create the real store or use `process` and `console`.
 
 ## Assumptions and decisions
 
-The brief deliberately leaves some things open. Here's what I decided and why:
+The brief leaves some things open on purpose. Here's what I decided and why.
 
-- **Identity:** `partner_member_id` is the only thing that identifies a member. If any other field changes — including the email — it's treated as an update to the same person, not a new record, because that's literally what the id is for.
-- **Change detection:** every field of an incoming valid row is compared against the stored record; any difference is an update, no difference is a no-op, no prior record is a create.
-- **Duplicate ids within one file:** if the same `partner_member_id` appears twice in a single import, the later row wins. This falls out naturally from processing rows in file order and is consistent with how a changed row is handled between imports.
-- **Imports are all-or-nothing:** valid rows are applied in memory and the data file is saved once at the end (via a temp file and rename, so it's never half-written). If an import fails partway, nothing from it is saved, and re-running it is safe. Re-importing an unchanged file doesn't write at all.
-- **Wrong number of values:** a row with too few values is rejected with a "field is required" reason for each missing one. A row with more values than the header is also rejected, because that usually means a stray comma has pushed every later value into the wrong column. That includes a trailing comma, which some spreadsheet exports add.
-- **Trusting the data file:** `data/members.json` is checked when it's read, since it can be edited by hand. If it isn't valid JSON, isn't a list, or has a member with a missing field, the import or lookup fails with a message naming the file, rather than carrying on with bad data.
-- **Date validation:** dates must be strict `YYYY-MM-DD` and a real calendar date — `2024-02-30` is rejected rather than silently rolled over to March. I'm not validating that a date of birth implies a sensible age; that felt out of scope for the time box.
-- **Email validation:** a structural check (`local@domain.tld` shape), not full RFC 5322 compliance. Good enough to catch the obviously broken rows without writing a spec-compliant email parser.
-- **Policy dates:** `policy_end` must not be before `policy_start`; equal is allowed (a single-day policy is plausible).
-- **Rejection reporting:** every row can fail for multiple reasons at once, and all of them are reported together (not just the first), so a partner could fix their file from one report instead of a back-and-forth.
-- **Storage:** a JSON file behind the `MemberStore` interface, rather than SQLite. The brief says either is fine, and neither is actually what a production system would use (that would be a proper managed database) — so I didn't treat this as the interesting decision. The interesting part is that nothing outside `store.ts` knows which storage is in use, so swapping it out later is a one-file change, not a redesign. JSON also has zero native dependencies, which matters for "clone and run" reliability.
-- **Lookup interface:** an HTTP endpoint rather than a CLI command. In practice this data is more likely to be queried by another system than typed by a person, and it gives a bit of real full-stack surface (routing, status codes) that's relevant to the role, at very low extra cost since the underlying store lookup is identical either way.
-- **Out of scope for this exercise:** authentication on the endpoint, a listing/pagination endpoint, partner-namespacing of ids (this assumes one partner's file at a time), and concurrent-write locking on the JSON file. All reasonable next steps, not needed to demonstrate the behaviour asked for here.
+- **Same member:** a member is identified only by `partner_member_id`. If any other field changes, including the email, it's an update to the same person, not a new member.
+- **New, changed or unchanged:** each valid row is compared with the saved member that has the same id. No saved member means it's created. Any difference means it's updated. No difference means nothing changes.
+- **Same id twice in one file:** the later row wins, just as if it had come in a later import.
+- **All or nothing:** the whole import is saved in one write, at the end. It's written to a temporary file which then replaces the real one, so the file is never half-written. If an import fails partway, nothing from it is saved and it can simply be run again. Re-importing an unchanged file doesn't write anything.
+- **Dates:** dates must be `YYYY-MM-DD` and a real calendar date, so `2024-02-30` is rejected rather than quietly turned into 1 March. I don't check whether a date of birth gives a sensible age.
+- **Emails:** a simple shape check (`name@domain.tld`), not the full email standard. It catches clearly broken addresses.
+- **Policy dates:** `policy_end` can't be before `policy_start`. The same day is allowed.
+- **Wrong number of values:** a row with too few values is rejected with a "… is required" reason for each missing field. A row with more values than the header is also rejected, because an extra comma shifts every later value into the wrong column. That includes a trailing comma.
+- **Reporting rejections:** every reason a row fails is reported at once, not just the first. The line number matches the line in the file, counting blank lines, so the partner can find the row in their editor.
+- **The data file is checked when it's read:** `data/members.json` could be edited by hand. If it isn't valid JSON, isn't a list, or has a member with a missing field, the program stops with an error that names the file.
+- **Storage:** a JSON file, which the brief allows. A real system would use a proper database. What matters more is that only `store.ts` knows how members are stored, so changing it later is a one-file change. A JSON file also needs no extra software, so the project runs straight after `npm install`.
+- **Lookup:** an HTTP endpoint rather than a command. In practice, another system is more likely to look members up than a person is, and the extra work over a command is small.
 
-## How I used AI tooling
+## What I'd do next
 
-I used Claude Code throughout, but treated it as a pair-programmer to direct rather than a black box to accept from — the two decisions with real trade-offs (storage backend, lookup mechanism) were things I pushed back on and made deliberately, not just took the first suggestion for. Specifically:
+These were left out to keep the exercise small:
 
-- **Helped:** scaffolding the boilerplate (project setup, the Express/Express-supertest wiring, test skeletons), and drafting this README from the actual decisions made in our conversation.
-- **Helped, but I directed it:** the storage and lookup-mechanism choices above didn't come from just accepting a default — I asked "is JSON too basic for a technical test?" and "how should lookup work?" and pushed for actual reasoning rather than a shrug, which is what's written above.
-- **Where it caught something I'd have missed:** I asked for an adversarial pass against the plan before writing any code. It found a real bug before it existed — the CSV parser's default settings throw and abort the _entire_ import on a single malformed row (wrong column count), which would have directly broken the "reject rows and report why" requirement for exactly the kind of row a real partner file might contain. It also caught that the freshly-installed `typescript` and `@types/node` versions were mismatched/unusually new in a way that added risk with no benefit, and that "safe to run more than once" — the brief's most emphasized requirement — was only going to be checked manually rather than by an automated test. All three are reflected in the final code and tests.
-- **Where it didn't help / I had to steer:** early drafts of the plan leaned toward "either storage option is equally fine" without a real justification — I had to explicitly ask for the actual trade-off reasoning before accepting a direction, since "the brief allows it" isn't the same as "it's the right call for a technical test."
+- Authentication on the lookup endpoint.
+- An endpoint to list members, with pagination.
+- Keeping each partner's ids separate. This version assumes one partner's file at a time.
+- Locking, so two imports running at the same moment can't overwrite each other's changes.
+- A real database instead of the JSON file.
 
-## How I checked correctness
+## How I used AI tools
 
-- `npm test` — 40 automated tests covering validation rules (including edge cases like leap years, `2024-02-30`, and rows with missing columns), store upsert semantics (created/updated/unchanged transitions, a malformed data file, including persistence across separate `JsonFileMemberStore` instances to simulate re-running the CLI as a fresh process), full-file import behaviour (idempotency, updates, rejected-row reporting with file line numbers, rows with too few or too many values, one save per import, all-or-nothing on failure), the printed import report (including a row with no id), the `DATA_FILE` and `PORT` settings, and the HTTP endpoint (hit and miss).
-- Manually ran `npm run import -- samples/sample.csv` twice in a row and confirmed the second run reports zero creates and all previously-valid rows as `unchanged`, with identical rejections both times.
-- Manually ran `npm run import -- samples/sample-updated.csv` and confirmed exactly one `updated` result, and that `data/members.json` reflects the new value.
-- Manually started the server and `curl`'d both a known and an unknown `partner_member_id` to confirm the 200/404 responses.
+I used Claude Code throughout. I treated it as a pair programmer that I directed and checked, not something whose output I accepted as-is.
+
+**Where it helped:**
+
+- Setting up the project and the boilerplate: TypeScript, ESLint, Prettier, Vitest, and the Express and supertest wiring.
+- Reviewing the plan before any code was written. It found that the CSV library's default settings stop the whole import when one row has the wrong number of values, which would have broken "reject invalid rows and report why". It also found that npm had installed a very new TypeScript version and Node type definitions that didn't match the Node version in use, and that running the import twice was only going to be checked by hand, not by a test.
+- Reviewing the finished code. This found that:
+  - the running server didn't see new imports until it was restarted;
+  - the data file could be left half-written if the program crashed while saving;
+  - the file was saved once per row instead of once per import;
+  - rejected rows were numbered by row, not by their line in the file.
+
+  All of these are fixed and covered by tests.
+
+- Explaining the code back to me in plain language, so I could check I understood every part of it.
+- Drafting this README from the decisions we made.
+
+**Where it didn't help, or I had to steer it:**
+
+- On storage, its first answer was that either option was fine, with no real reasoning. I had to push for the actual trade-offs before choosing.
+- It worked around a gap in the CSV library's TypeScript types with a type cast. When I questioned it, there was a cleaner option the library does support, so I switched to that.
+- It added a save-one-member method that only the tests used. I removed it, so the tests exercise the same code path as the real import.
+
+## How I checked it works
+
+- **Automated tests:** `npm test` runs 40 tests. They cover:
+  - validation rules, including leap years, `2024-02-30`, and rows with missing values;
+  - the store: created, updated and unchanged; data surviving between separate runs; a running server seeing a new import; a bad data file; a failed save leaving the old data untouched;
+  - the import: running the same file twice, updates, rejected rows with their line numbers, rows with too few or too many values, saving once per import, and saving nothing if the import fails partway;
+  - the printed report, the `DATA_FILE` and `PORT` settings, and the lookup endpoint (member found and not found).
+- **By hand:**
+  - Imported `samples/sample.csv` twice. The first run created 3 members and rejected 6 rows. The second run reported the 3 members as unchanged, with the same 6 rejections.
+  - Imported `samples/sample-updated.csv` and got exactly 1 update (PM-1002's email), which was then in `data/members.json`.
+  - Started the server and used `curl` to look up a known id (200) and an unknown id (404).
