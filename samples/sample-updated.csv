@@ -1,0 +1,4 @@
+partner_member_id,first_name,last_name,date_of_birth,email,policy_start,policy_end
+PM-1001,Alice,Nguyen,1990-04-12,alice.nguyen@example.com,2024-01-01,2024-12-31
+PM-1002,Ben,Ochieng,1985-11-02,ben.ochieng@newmail.example.com,2024-02-01,2025-01-31
+PM-1003,Carla,Smith,1978-07-19,carla.smith@example.com,2023-06-01,2024-05-31

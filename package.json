@@ -1,0 +1,34 @@
+{
+  "name": "partner-eligibility",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "vitest run",
+    "format:check": "prettier --check .",
+    "dev": "tsx src/index.ts",
+    "import": "tsx src/cli.ts",
+    "build": "tsc",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "description": "CSV import and lookup service for partner-supplied eligibility lists",
+  "type": "module",
+  "private": "true",
+  "dependencies": {
+    "csv-parse": "^7.0.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.4",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.9",
+    "supertest": "^7.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.1"
+  }
+}
