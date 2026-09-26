@@ -1,8 +1,8 @@
 import path from "node:path";
 
-// Settings shared by both entry points, so the import and the server can't
-// drift apart. They take the raw environment value as an argument, which keeps
-// reading `process.env` in the entry points and makes these easy to test.
+// Settings shared by the import CLI and the server, so they can't disagree.
+// Each takes the raw environment value as an argument, so `process.env` is
+// only read in the entry points and these are easy to test.
 
 export function dataFilePath(value: string | undefined): string {
   return value || path.resolve("data", "members.json");

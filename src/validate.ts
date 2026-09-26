@@ -29,8 +29,8 @@ export type ValidationResult =
 export function validateRow(row: RawRow): ValidationResult {
   const reasons: string[] = [];
 
-  // Missing fields become "" rather than undefined, so every field is a string
-  // and the member can be built at the end without non-null assertions.
+  // A missing field is treated as "", so each check below catches missing and
+  // blank values alike, and every field is already a string for the member.
   const partnerMemberId = row.partner_member_id?.trim() ?? "";
   if (!partnerMemberId) reasons.push("partner_member_id is required");
 

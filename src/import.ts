@@ -10,20 +10,17 @@ export async function importCsv(
 ): Promise<ImportReport> {
   const content = await readFile(filePath, "utf-8");
 
-  // Rows are parsed as plain lists of values and matched to the header here,
-  // rather than with csv-parse's `columns` option, because that option quietly
-  // drops any values beyond the header. Keeping them lets a row with too many
-  // values be rejected (usually a stray comma, which shifts every value after
-  // it into the wrong column).
+  // Rows are matched to the header by hand, not with csv-parse's `columns`
+  // option, because `columns` silently drops values beyond the header. We
+  // need them to reject rows with too many values (usually a stray comma,
+  // which shifts every later value into the wrong column).
   //
-  // relax_column_count: without it, a single ragged row (wrong column count -
-  // a realistic partner-file error) throws and aborts parsing the entire
-  // file. With it, a short row just comes through with missing keys, which
-  // validateRow already reports as "field is required".
-  //
-  // info: attaches each row's line number in the file, so rejections point at
-  // the line the partner sees in their editor (blank lines included).
-  // csv-parse's types only describe `info` alongside `columns`, hence the cast.
+  // - relax_column_count: otherwise one row with the wrong number of values
+  //   stops the whole file from parsing. A short row's missing values are
+  //   reported by validateRow as "... is required".
+  // - info: gives each row's line number in the file (blank lines included),
+  //   so rejections match what the partner sees in their editor. csv-parse's
+  //   types don't cover `info` without `columns`, hence the cast.
   const [headerRow, ...rows] = parse(content, {
     trim: true,
     skip_empty_lines: true,

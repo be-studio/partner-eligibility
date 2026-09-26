@@ -39,7 +39,6 @@ describe("JsonFileMemberStore", () => {
     const storeA = new JsonFileMemberStore(filePath);
     await expect(storeA.upsert(member)).resolves.toBe("created");
 
-    // A fresh instance on the same file stands in for a second CLI invocation.
     const storeB = new JsonFileMemberStore(filePath);
     await expect(storeB.findById("PM-1")).resolves.toEqual(member);
 

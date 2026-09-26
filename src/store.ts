@@ -42,9 +42,9 @@ function isMember(value: unknown): value is Member {
   return MEMBER_FIELDS.every((field) => typeof record[field] === "string");
 }
 
-// The data file can be edited by hand, so check its shape on the way in and
-// fail with a message that names the file, rather than letting a bad record
-// surface later as a confusing error somewhere else.
+// The data file can be edited by hand, so check its shape when loading it.
+// A bad file then fails straight away with an error naming the file, instead
+// of causing a confusing error somewhere else later.
 function parseMembersFile(raw: string, filePath: string): Member[] {
   let data: unknown;
   try {
@@ -64,14 +64,11 @@ function parseMembersFile(raw: string, filePath: string): Member[] {
   return data;
 }
 
-// Persists to a JSON file so imports survive across process runs. Rewrites
-// the whole file on each save (once per import); fine at this scale, and
-// swapping in a different backing store only means writing a new class
-// against the MemberStore interface above.
+// Keeps members in a JSON file so imports survive between runs. Each save
+// rewrites the whole file (once per import).
 //
-// The file is re-read whenever its modified time changes, so a long-running
-// process (the lookup server) sees imports made by a separate CLI run without
-// needing a restart.
+// The file is re-read whenever its modified time changes, so the running
+// lookup server picks up imports made by the CLI without a restart.
 export class JsonFileMemberStore implements MemberStore {
   private members = new Map<string, Member>();
   private loaded = false;
@@ -130,8 +127,8 @@ export class JsonFileMemberStore implements MemberStore {
   async upsertMany(members: Member[]): Promise<UpsertResult[]> {
     await this.load();
     const next = new Map(this.members);
-    // Compared against `next`, not the saved state, so a repeated id later in
-    // the same batch is judged against the earlier occurrence.
+    // Compare against `next`, not the saved state, so if an id appears twice in
+    // one batch, the second is compared with the first.
     const results = members.map((member): UpsertResult => {
       const existing = next.get(member.partnerMemberId);
       next.set(member.partnerMemberId, member);
