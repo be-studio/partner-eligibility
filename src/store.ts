@@ -24,6 +24,46 @@ function isSameMember(a: Member, b: Member): boolean {
   );
 }
 
+// Written as an object so TypeScript fails to compile if Member gains a field
+// that isn't listed here.
+const MEMBER_FIELDS = Object.keys({
+  partnerMemberId: true,
+  firstName: true,
+  lastName: true,
+  dateOfBirth: true,
+  email: true,
+  policyStart: true,
+  policyEnd: true
+} satisfies Record<keyof Member, true>);
+
+function isMember(value: unknown): value is Member {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return MEMBER_FIELDS.every((field) => typeof record[field] === "string");
+}
+
+// The data file can be edited by hand, so check its shape on the way in and
+// fail with a message that names the file, rather than letting a bad record
+// surface later as a confusing error somewhere else.
+function parseMembersFile(raw: string, filePath: string): Member[] {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`${filePath} is not valid JSON`, { cause: error });
+  }
+  if (!Array.isArray(data)) {
+    throw new Error(`${filePath} should contain a list of members`);
+  }
+  const badIndex = data.findIndex((record) => !isMember(record));
+  if (badIndex !== -1) {
+    throw new Error(
+      `${filePath}: entry ${badIndex + 1} is not a valid member (every field must be a string)`
+    );
+  }
+  return data;
+}
+
 // Persists to a JSON file so imports survive across process runs. Rewrites
 // the whole file on each save (once per import); fine at this scale, and
 // swapping in a different backing store only means writing a new class
@@ -56,8 +96,9 @@ export class JsonFileMemberStore implements MemberStore {
     const members = new Map<string, Member>();
     if (mtimeMs !== undefined) {
       const raw = await fs.readFile(this.filePath, "utf-8");
-      const records: Member[] = JSON.parse(raw);
-      for (const record of records) members.set(record.partnerMemberId, record);
+      for (const record of parseMembersFile(raw, this.filePath)) {
+        members.set(record.partnerMemberId, record);
+      }
     }
     this.members = members;
     this.loadedMtimeMs = mtimeMs;

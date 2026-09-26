@@ -2,7 +2,8 @@ import {
   mkdtempSync,
   promises as fsPromises,
   readdirSync,
-  rmSync
+  rmSync,
+  writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -89,6 +90,24 @@ describe("JsonFileMemberStore", () => {
     ).resolves.toEqual(member);
     expect(readdirSync(dir)).toEqual(["members.json"]);
   });
+
+  it.each([
+    ["isn't valid JSON", "[{", "is not valid JSON"],
+    ["isn't a list", '{"PM-1": {}}', "should contain a list of members"],
+    [
+      "has a record missing a field",
+      JSON.stringify([member, { ...member, email: undefined }]),
+      "entry 2 is not a valid member"
+    ]
+  ])(
+    "fails with a clear message when the data file %s",
+    async (_, contents, message) => {
+      writeFileSync(filePath, contents);
+      const store = new JsonFileMemberStore(filePath);
+      await expect(store.findById("PM-1")).rejects.toThrow(message);
+      await expect(store.findById("PM-1")).rejects.toThrow(filePath);
+    }
+  );
 
   it("starts empty when the backing file doesn't exist yet", async () => {
     const store = new JsonFileMemberStore(
