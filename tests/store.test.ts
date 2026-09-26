@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { InMemoryMemberStore, JsonFileMemberStore } from "../src/store.js";
+import { JsonFileMemberStore } from "../src/store.js";
 import type { Member } from "../src/types.js";
 
 const member: Member = {
@@ -14,35 +14,6 @@ const member: Member = {
   policyStart: "2024-01-01",
   policyEnd: "2024-12-31"
 };
-
-describe("InMemoryMemberStore", () => {
-  let store: InMemoryMemberStore;
-
-  beforeEach(() => {
-    store = new InMemoryMemberStore();
-  });
-
-  it("reports 'created' the first time a member is upserted", async () => {
-    await expect(store.upsert(member)).resolves.toBe("created");
-    await expect(store.findById("PM-1")).resolves.toEqual(member);
-  });
-
-  it("reports 'unchanged' when upserting an identical record again", async () => {
-    await store.upsert(member);
-    await expect(store.upsert(member)).resolves.toBe("unchanged");
-  });
-
-  it("reports 'updated' when a field differs, and stores the new value", async () => {
-    await store.upsert(member);
-    const changed = { ...member, email: "alice.new@example.com" };
-    await expect(store.upsert(changed)).resolves.toBe("updated");
-    await expect(store.findById("PM-1")).resolves.toEqual(changed);
-  });
-
-  it("returns undefined for an unknown id", async () => {
-    await expect(store.findById("does-not-exist")).resolves.toBeUndefined();
-  });
-});
 
 describe("JsonFileMemberStore", () => {
   let dir: string;

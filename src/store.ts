@@ -21,25 +21,6 @@ function isSameMember(a: Member, b: Member): boolean {
   );
 }
 
-export class InMemoryMemberStore implements MemberStore {
-  private members = new Map<string, Member>();
-
-  async upsert(member: Member): Promise<UpsertResult> {
-    const existing = this.members.get(member.partnerMemberId);
-    this.members.set(member.partnerMemberId, member);
-    if (!existing) return "created";
-    return isSameMember(existing, member) ? "unchanged" : "updated";
-  }
-
-  async findById(partnerMemberId: string): Promise<Member | undefined> {
-    return this.members.get(partnerMemberId);
-  }
-
-  async all(): Promise<Member[]> {
-    return [...this.members.values()];
-  }
-}
-
 // Persists to a JSON file so imports survive across process runs. Loads
 // lazily and re-persists the whole file on every write; fine at this scale,
 // and swapping in a different backing store only means writing a new class

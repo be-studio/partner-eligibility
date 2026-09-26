@@ -56,7 +56,7 @@ Also available: `npm run lint` (ESLint), `npm run format` / `npm run format:chec
 
 - `src/types.ts` — the `Member` domain type and report shapes.
 - `src/validate.ts` — pure validation of one raw CSV row; no side effects, easy to unit test in isolation.
-- `src/store.ts` — a `MemberStore` interface with two implementations: `InMemoryMemberStore` (used in tests) and `JsonFileMemberStore` (used by the CLI and server). Nothing outside this file knows or cares which one is in use.
+- `src/store.ts` — a `MemberStore` interface with one implementation, `JsonFileMemberStore`. Everything else (the import logic, the server, the tests) depends only on the interface, not the concrete class — so swapping in a different storage engine later is a one-file change, not a redesign.
 - `src/import.ts` — reads and parses the CSV, validates each row, and upserts valid ones into whichever store it's given.
 - `src/server.ts` — a small Express app exposing the lookup endpoint; takes a store as an argument so it can be tested without touching disk or a real port.
 - `src/index.ts` / `src/cli.ts` — the two entry points (HTTP server, import command). These are the only places that construct a real `JsonFileMemberStore` or touch `process`/`console` — everything else is pure and directly testable.

@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/server.js";
-import { InMemoryMemberStore } from "../src/store.js";
+import { JsonFileMemberStore } from "../src/store.js";
 import type { Member } from "../src/types.js";
 
 const member: Member = {
@@ -15,8 +18,18 @@ const member: Member = {
 };
 
 describe("GET /members/:partnerMemberId", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "peu-server-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it("returns 200 and the member for a known id", async () => {
-    const store = new InMemoryMemberStore();
+    const store = new JsonFileMemberStore(path.join(dir, "members.json"));
     await store.upsert(member);
     const app = createApp(store);
 
@@ -27,7 +40,7 @@ describe("GET /members/:partnerMemberId", () => {
   });
 
   it("returns 404 for an unknown id", async () => {
-    const store = new InMemoryMemberStore();
+    const store = new JsonFileMemberStore(path.join(dir, "members.json"));
     const app = createApp(store);
 
     const response = await request(app).get("/members/does-not-exist");

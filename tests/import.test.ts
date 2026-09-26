@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { importCsv } from "../src/import.js";
-import { InMemoryMemberStore } from "../src/store.js";
+import { JsonFileMemberStore } from "../src/store.js";
 
 const HEADER =
   "partner_member_id,first_name,last_name,date_of_birth,email,policy_start,policy_end";
@@ -16,11 +16,11 @@ function writeCsv(dir: string, contents: string): string {
 
 describe("importCsv", () => {
   let dir: string;
-  let store: InMemoryMemberStore;
+  let store: JsonFileMemberStore;
 
   beforeEach(() => {
     dir = mkdtempSync(path.join(tmpdir(), "peu-import-"));
-    store = new InMemoryMemberStore();
+    store = new JsonFileMemberStore(path.join(dir, "members.json"));
   });
 
   afterEach(() => {
