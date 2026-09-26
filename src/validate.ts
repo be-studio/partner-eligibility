@@ -29,41 +29,41 @@ export type ValidationResult =
 export function validateRow(row: RawRow): ValidationResult {
   const reasons: string[] = [];
 
-  const partnerMemberId = row.partner_member_id?.trim();
+  // Missing fields become "" rather than undefined, so every field is a string
+  // and the member can be built at the end without non-null assertions.
+  const partnerMemberId = row.partner_member_id?.trim() ?? "";
   if (!partnerMemberId) reasons.push("partner_member_id is required");
 
-  const firstName = row.first_name?.trim();
+  const firstName = row.first_name?.trim() ?? "";
   if (!firstName) reasons.push("first_name is required");
 
-  const lastName = row.last_name?.trim();
+  const lastName = row.last_name?.trim() ?? "";
   if (!lastName) reasons.push("last_name is required");
 
-  const dateOfBirth = row.date_of_birth?.trim();
+  const dateOfBirth = row.date_of_birth?.trim() ?? "";
   if (!dateOfBirth) reasons.push("date_of_birth is required");
   else if (!isValidCalendarDate(dateOfBirth)) {
     reasons.push("date_of_birth must be a valid YYYY-MM-DD date");
   }
 
-  const email = row.email?.trim();
+  const email = row.email?.trim() ?? "";
   if (!email) reasons.push("email is required");
   else if (!EMAIL_RE.test(email))
     reasons.push("email is not a valid email address");
 
-  const policyStart = row.policy_start?.trim();
-  const policyStartValid =
-    policyStart !== undefined && isValidCalendarDate(policyStart);
+  const policyStart = row.policy_start?.trim() ?? "";
+  const policyStartValid = isValidCalendarDate(policyStart);
   if (!policyStart) reasons.push("policy_start is required");
   else if (!policyStartValid)
     reasons.push("policy_start must be a valid YYYY-MM-DD date");
 
-  const policyEnd = row.policy_end?.trim();
-  const policyEndValid =
-    policyEnd !== undefined && isValidCalendarDate(policyEnd);
+  const policyEnd = row.policy_end?.trim() ?? "";
+  const policyEndValid = isValidCalendarDate(policyEnd);
   if (!policyEnd) reasons.push("policy_end is required");
   else if (!policyEndValid)
     reasons.push("policy_end must be a valid YYYY-MM-DD date");
 
-  if (policyStartValid && policyEndValid && policyEnd! < policyStart!) {
+  if (policyStartValid && policyEndValid && policyEnd < policyStart) {
     reasons.push("policy_end must not be before policy_start");
   }
 
@@ -74,13 +74,13 @@ export function validateRow(row: RawRow): ValidationResult {
   return {
     valid: true,
     member: {
-      partnerMemberId: partnerMemberId!,
-      firstName: firstName!,
-      lastName: lastName!,
-      dateOfBirth: dateOfBirth!,
-      email: email!,
-      policyStart: policyStart!,
-      policyEnd: policyEnd!
+      partnerMemberId,
+      firstName,
+      lastName,
+      dateOfBirth,
+      email,
+      policyStart,
+      policyEnd
     }
   };
 }
