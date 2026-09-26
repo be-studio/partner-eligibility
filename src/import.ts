@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { parse, type Info } from "csv-parse/sync";
-import type { MemberStore } from "./store.js";
+import type { MemberStore, UpsertResult } from "./store.js";
 import { validateRow, type RawRow } from "./validate.js";
-import type { ImportReport, RejectedRow } from "./types.js";
+import type { ImportReport, Member, RejectedRow } from "./types.js";
 
 export async function importCsv(
   filePath: string,
@@ -26,9 +26,7 @@ export async function importCsv(
   });
 
   const rejected: RejectedRow[] = [];
-  let created = 0;
-  let updated = 0;
-  let unchanged = 0;
+  const validMembers: Member[] = [];
 
   for (const { record: row, info } of rows) {
     const result = validateRow(row);
@@ -40,18 +38,18 @@ export async function importCsv(
       });
       continue;
     }
-
-    const outcome = await store.upsert(result.member);
-    if (outcome === "created") created++;
-    else if (outcome === "updated") updated++;
-    else unchanged++;
+    validMembers.push(result.member);
   }
+
+  const outcomes = await store.upsertMany(validMembers);
+  const count = (outcome: UpsertResult) =>
+    outcomes.filter((o) => o === outcome).length;
 
   return {
     totalRows: rows.length,
-    created,
-    updated,
-    unchanged,
+    created: count("created"),
+    updated: count("updated"),
+    unchanged: count("unchanged"),
     rejected
   };
 }

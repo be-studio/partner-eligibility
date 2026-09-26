@@ -57,7 +57,7 @@ Also available: `npm run lint` (ESLint), `npm run format` / `npm run format:chec
 - `src/types.ts` — the `Member` domain type and report shapes.
 - `src/validate.ts` — pure validation of one raw CSV row; no side effects, easy to unit test in isolation.
 - `src/store.ts` — a `MemberStore` interface with one implementation, `JsonFileMemberStore`. Everything else (the import logic, the server, the tests) depends only on the interface, not the concrete class — so swapping in a different storage engine later is a one-file change, not a redesign.
-- `src/import.ts` — reads and parses the CSV, validates each row, and upserts valid ones into whichever store it's given.
+- `src/import.ts` — reads and parses the CSV, validates each row, and upserts all the valid ones into whichever store it's given in a single batch.
 - `src/server.ts` — a small Express app exposing the lookup endpoint; takes a store as an argument so tests can hand it a store backed by a throwaway temp file, without starting a real server.
 - `src/index.ts` / `src/cli.ts` — the two entry points (HTTP server, import command). These are the only places that construct a real `JsonFileMemberStore` or touch `process`/`console` — everything else is pure and directly testable.
 
@@ -68,6 +68,7 @@ The brief deliberately leaves some things open. Here's what I decided and why:
 - **Identity:** `partner_member_id` is the only thing that identifies a member. If any other field changes — including the email — it's treated as an update to the same person, not a new record, because that's literally what the id is for.
 - **Change detection:** every field of an incoming valid row is compared against the stored record; any difference is an update, no difference is a no-op, no prior record is a create.
 - **Duplicate ids within one file:** if the same `partner_member_id` appears twice in a single import, the later row wins. This falls out naturally from processing rows in file order and is consistent with how a changed row is handled between imports.
+- **Imports are all-or-nothing:** valid rows are applied in memory and the data file is saved once at the end (via a temp file and rename, so it's never half-written). If an import fails partway, nothing from it is saved, and re-running it is safe. Re-importing an unchanged file doesn't write at all.
 - **Date validation:** dates must be strict `YYYY-MM-DD` and a real calendar date — `2024-02-30` is rejected rather than silently rolled over to March. I'm not validating that a date of birth implies a sensible age; that felt out of scope for the time box.
 - **Email validation:** a structural check (`local@domain.tld` shape), not full RFC 5322 compliance. Good enough to catch the obviously broken rows without writing a spec-compliant email parser.
 - **Policy dates:** `policy_end` must not be before `policy_start`; equal is allowed (a single-day policy is plausible).
@@ -87,7 +88,7 @@ I used Claude Code throughout, but treated it as a pair-programmer to direct rat
 
 ## How I checked correctness
 
-- `npm test` — 22 automated tests covering validation rules (including edge cases like leap years, `2024-02-30`, and rows with missing columns), store upsert semantics (created/updated/unchanged transitions, including persistence across separate `JsonFileMemberStore` instances to simulate re-running the CLI as a fresh process), full-file import behaviour (idempotency, updates, rejected-row reporting, a ragged/malformed row), and the HTTP endpoint (hit and miss).
+- `npm test` — 24 automated tests covering validation rules (including edge cases like leap years, `2024-02-30`, and rows with missing columns), store upsert semantics (created/updated/unchanged transitions, including persistence across separate `JsonFileMemberStore` instances to simulate re-running the CLI as a fresh process), full-file import behaviour (idempotency, updates, rejected-row reporting with file line numbers, a ragged/malformed row, one save per import, all-or-nothing on failure), and the HTTP endpoint (hit and miss).
 - Manually ran `npm run import -- samples/sample.csv` twice in a row and confirmed the second run reports zero creates and all previously-valid rows as `unchanged`, with identical rejections both times.
 - Manually ran `npm run import -- samples/sample-updated.csv` and confirmed exactly one `updated` result, and that `data/members.json` reflects the new value.
 - Manually started the server and `curl`'d both a known and an unknown `partner_member_id` to confirm the 200/404 responses.

@@ -6,6 +6,9 @@ export type UpsertResult = "created" | "updated" | "unchanged";
 
 export interface MemberStore {
   upsert(member: Member): Promise<UpsertResult>;
+  // Applies every member in order and saves once, all-or-nothing. Returns one
+  // result per member, in the same order.
+  upsertMany(members: Member[]): Promise<UpsertResult[]>;
   findById(partnerMemberId: string): Promise<Member | undefined>;
   all(): Promise<Member[]>;
 }
@@ -21,10 +24,10 @@ function isSameMember(a: Member, b: Member): boolean {
   );
 }
 
-// Persists to a JSON file so imports survive across process runs. Re-persists
-// the whole file on every write; fine at this scale, and swapping in a
-// different backing store only means writing a new class against the
-// MemberStore interface above.
+// Persists to a JSON file so imports survive across process runs. Rewrites
+// the whole file on each save (once per import); fine at this scale, and
+// swapping in a different backing store only means writing a new class
+// against the MemberStore interface above.
 //
 // The file is re-read whenever its modified time changes, so a long-running
 // process (the lookup server) sees imports made by a separate CLI run without
@@ -79,15 +82,29 @@ export class JsonFileMemberStore implements MemberStore {
   }
 
   async upsert(member: Member): Promise<UpsertResult> {
+    const [result] = await this.upsertMany([member]);
+    return result;
+  }
+
+  async upsertMany(members: Member[]): Promise<UpsertResult[]> {
     await this.load();
-    const existing = this.members.get(member.partnerMemberId);
-    // Only adopt the new state once it's safely on disk, so a failed save
-    // can't leave memory and the file disagreeing.
-    const next = new Map(this.members).set(member.partnerMemberId, member);
-    await this.persist(next);
-    this.members = next;
-    if (!existing) return "created";
-    return isSameMember(existing, member) ? "unchanged" : "updated";
+    const next = new Map(this.members);
+    // Compared against `next`, not the saved state, so a repeated id later in
+    // the same batch is judged against the earlier occurrence.
+    const results = members.map((member): UpsertResult => {
+      const existing = next.get(member.partnerMemberId);
+      next.set(member.partnerMemberId, member);
+      if (!existing) return "created";
+      return isSameMember(existing, member) ? "unchanged" : "updated";
+    });
+
+    if (results.some((result) => result !== "unchanged")) {
+      // Only adopt the new state once it's safely on disk, so a failed save
+      // can't leave memory and the file disagreeing.
+      await this.persist(next);
+      this.members = next;
+    }
+    return results;
   }
 
   async findById(partnerMemberId: string): Promise<Member | undefined> {

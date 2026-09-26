@@ -1,7 +1,13 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  promises as fsPromises,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { importCsv } from "../src/import.js";
 import { JsonFileMemberStore } from "../src/store.js";
 
@@ -24,6 +30,7 @@ describe("importCsv", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -124,6 +131,50 @@ describe("importCsv", () => {
     });
   });
 
+  it("saves the data file once per import, not once per row", async () => {
+    const csv = [
+      HEADER,
+      "PM-1,Alice,Nguyen,1990-04-12,alice@example.com,2024-01-01,2024-12-31",
+      "PM-2,Ben,Ochieng,1985-11-02,ben@example.com,2024-01-01,2024-12-31",
+      "PM-3,Carla,Smith,1978-07-19,carla@example.com,2024-01-01,2024-12-31"
+    ].join("\n");
+    const filePath = writeCsv(dir, csv);
+    const rename = vi.spyOn(fsPromises, "rename");
+
+    await importCsv(filePath, store);
+    expect(rename).toHaveBeenCalledTimes(1);
+
+    // Nothing changed, so the second import shouldn't write at all.
+    await importCsv(filePath, store);
+    expect(rename).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves nothing from an import that fails partway, rather than half of it", async () => {
+    const csv = [
+      HEADER,
+      "PM-1,Alice,Nguyen,1990-04-12,alice@example.com,2024-01-01,2024-12-31",
+      "PM-2,Ben,Ochieng,1985-11-02,ben@example.com,2024-01-01,2024-12-31"
+    ].join("\n");
+    // Fail any save that includes the second row, so a per-row save would
+    // already have written the first row before failing.
+    const realRename = fsPromises.rename.bind(fsPromises);
+    vi.spyOn(fsPromises, "rename").mockImplementation(async (from, to) => {
+      if (readFileSync(from, "utf-8").includes("PM-2")) {
+        throw new Error("disk full");
+      }
+      return realRename(from, to);
+    });
+
+    await expect(importCsv(writeCsv(dir, csv), store)).rejects.toThrow(
+      "disk full"
+    );
+
+    await expect(store.all()).resolves.toEqual([]);
+    await expect(
+      new JsonFileMemberStore(path.join(dir, "members.json")).all()
+    ).resolves.toEqual([]);
+  });
+
   it("lets a later duplicate partner_member_id in the same file win", async () => {
     const csv = [
       HEADER,
@@ -131,8 +182,9 @@ describe("importCsv", () => {
       "PM-1,Alice,Nguyen,1990-04-12,alice.updated@example.com,2024-01-01,2024-12-31"
     ].join("\n");
 
-    await importCsv(writeCsv(dir, csv), store);
+    const report = await importCsv(writeCsv(dir, csv), store);
 
+    expect(report).toMatchObject({ created: 1, updated: 1 });
     await expect(store.all()).resolves.toHaveLength(1);
     const stored = await store.findById("PM-1");
     expect(stored?.email).toBe("alice.updated@example.com");
