@@ -10,6 +10,12 @@ export async function importCsv(
 ): Promise<ImportReport> {
   const content = readFileSync(filePath, "utf-8");
 
+  // Rows are parsed as plain lists of values and matched to the header here,
+  // rather than with csv-parse's `columns` option, because that option quietly
+  // drops any values beyond the header. Keeping them lets a row with too many
+  // values be rejected (usually a stray comma, which shifts every value after
+  // it into the wrong column).
+  //
   // relax_column_count: without it, a single ragged row (wrong column count -
   // a realistic partner-file error) throws and aborts parsing the entire
   // file. With it, a short row just comes through with missing keys, which
@@ -17,24 +23,34 @@ export async function importCsv(
   //
   // info: attaches each row's line number in the file, so rejections point at
   // the line the partner sees in their editor (blank lines included).
-  const rows = parse<{ record: RawRow; info: Info }>(content, {
-    columns: true,
+  // csv-parse's types only describe `info` alongside `columns`, hence the cast.
+  const [headerRow, ...rows] = parse(content, {
     trim: true,
     skip_empty_lines: true,
     relax_column_count: true,
     info: true
-  });
+  }) as unknown as { record: string[]; info: Info }[];
+  const header = headerRow?.record ?? [];
 
   const rejected: RejectedRow[] = [];
   const validMembers: Member[] = [];
 
-  for (const { record: row, info } of rows) {
+  for (const { record: values, info } of rows) {
+    const row: RawRow = Object.fromEntries(
+      header.map((name, i) => [name, values[i]])
+    );
     const result = validateRow(row);
-    if (!result.valid) {
+    const reasons = result.valid ? [] : [...result.reasons];
+    if (values.length > header.length) {
+      reasons.push(
+        `row has ${values.length} values but the header has ${header.length}`
+      );
+    }
+    if (!result.valid || reasons.length > 0) {
       rejected.push({
         line: info.lines,
         partnerMemberId: row.partner_member_id || undefined,
-        reasons: result.reasons
+        reasons
       });
       continue;
     }

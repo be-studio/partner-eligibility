@@ -113,6 +113,42 @@ describe("importCsv", () => {
     expect(report.rejected[0].reasons).toContain("policy_end is required");
   });
 
+  it("rejects a row with more values than the header rather than dropping the extras", async () => {
+    const csv = [
+      HEADER,
+      "PM-1,Alice,Nguyen,1990-04-12,alice@example.com,2024-01-01,2024-12-31",
+      // A stray comma in the name shifts every later value one column right.
+      "PM-2,Ben,Ochieng,Jr,1985-11-02,ben@example.com,2024-01-01,2024-12-31"
+    ].join("\n");
+
+    const report = await importCsv(writeCsv(dir, csv), store);
+
+    expect(report.created).toBe(1);
+    expect(report.rejected).toHaveLength(1);
+    expect(report.rejected[0]).toMatchObject({
+      line: 3,
+      partnerMemberId: "PM-2"
+    });
+    expect(report.rejected[0].reasons).toContain(
+      "row has 8 values but the header has 7"
+    );
+    await expect(store.findById("PM-2")).resolves.toBeUndefined();
+  });
+
+  it("rejects an otherwise valid row that has an extra value on the end", async () => {
+    const csv = [
+      HEADER,
+      "PM-1,Alice,Nguyen,1990-04-12,alice@example.com,2024-01-01,2024-12-31,oops"
+    ].join("\n");
+
+    const report = await importCsv(writeCsv(dir, csv), store);
+
+    expect(report.created).toBe(0);
+    expect(report.rejected[0].reasons).toEqual([
+      "row has 8 values but the header has 7"
+    ]);
+  });
+
   it("reports rejected rows by their line in the file, counting blank lines", async () => {
     const csv = [
       HEADER,
