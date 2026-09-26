@@ -1,5 +1,6 @@
-import path from "node:path";
+import { dataFilePath } from "./config.js";
 import { importCsv } from "./import.js";
+import { formatReport } from "./report.js";
 import { JsonFileMemberStore } from "./store.js";
 
 async function main() {
@@ -10,27 +11,9 @@ async function main() {
     return;
   }
 
-  const DATA_FILE =
-    process.env.DATA_FILE ?? path.join(process.cwd(), "data", "members.json");
-  const store = new JsonFileMemberStore(DATA_FILE);
-
+  const store = new JsonFileMemberStore(dataFilePath(process.env.DATA_FILE));
   const report = await importCsv(filePath, store);
-
-  console.log(`Total rows read: ${report.totalRows}`);
-  console.log(`Created:         ${report.created}`);
-  console.log(`Updated:         ${report.updated}`);
-  console.log(`Unchanged:       ${report.unchanged}`);
-  console.log(`Rejected:        ${report.rejected.length}`);
-
-  if (report.rejected.length > 0) {
-    console.log("\nRejected rows:");
-    for (const r of report.rejected) {
-      const id = r.partnerMemberId ?? "<missing>";
-      console.log(
-        `  Line ${r.line} (partner_member_id=${id}): ${r.reasons.join("; ")}`
-      );
-    }
-  }
+  console.log(formatReport(report));
 }
 
 main().catch((error) => {

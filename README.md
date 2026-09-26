@@ -59,6 +59,8 @@ Also available: `npm run lint` (ESLint), `npm run format` / `npm run format:chec
 - `src/store.ts` — a `MemberStore` interface with one implementation, `JsonFileMemberStore`. Everything else (the import logic, the server, the tests) depends only on the interface, not the concrete class — so swapping in a different storage engine later is a one-file change, not a redesign.
 - `src/import.ts` — reads and parses the CSV, validates each row, and upserts all the valid ones into whichever store it's given in a single batch.
 - `src/server.ts` — a small Express app exposing the lookup endpoint; takes a store as an argument so tests can hand it a store backed by a throwaway temp file, without starting a real server.
+- `src/report.ts` — turns an import report into the text the import command prints, so that output can be tested without running the command.
+- `src/config.ts` — the settings both entry points share: where the data file lives (`DATA_FILE`) and which port to listen on (`PORT`, checked to be a valid port number).
 - `src/index.ts` / `src/cli.ts` — the two entry points (HTTP server, import command). These are the only places that construct a real `JsonFileMemberStore` or touch `process`/`console` — everything else is pure and directly testable.
 
 ## Assumptions and decisions
@@ -90,7 +92,7 @@ I used Claude Code throughout, but treated it as a pair-programmer to direct rat
 
 ## How I checked correctness
 
-- `npm test` — 29 automated tests covering validation rules (including edge cases like leap years, `2024-02-30`, and rows with missing columns), store upsert semantics (created/updated/unchanged transitions, a malformed data file, including persistence across separate `JsonFileMemberStore` instances to simulate re-running the CLI as a fresh process), full-file import behaviour (idempotency, updates, rejected-row reporting with file line numbers, rows with too few or too many values, one save per import, all-or-nothing on failure), and the HTTP endpoint (hit and miss).
+- `npm test` — 40 automated tests covering validation rules (including edge cases like leap years, `2024-02-30`, and rows with missing columns), store upsert semantics (created/updated/unchanged transitions, a malformed data file, including persistence across separate `JsonFileMemberStore` instances to simulate re-running the CLI as a fresh process), full-file import behaviour (idempotency, updates, rejected-row reporting with file line numbers, rows with too few or too many values, one save per import, all-or-nothing on failure), the printed import report (including a row with no id), the `DATA_FILE` and `PORT` settings, and the HTTP endpoint (hit and miss).
 - Manually ran `npm run import -- samples/sample.csv` twice in a row and confirmed the second run reports zero creates and all previously-valid rows as `unchanged`, with identical rejections both times.
 - Manually ran `npm run import -- samples/sample-updated.csv` and confirmed exactly one `updated` result, and that `data/members.json` reflects the new value.
 - Manually started the server and `curl`'d both a known and an unknown `partner_member_id` to confirm the 200/404 responses.
